@@ -24,13 +24,6 @@
 namespace AK {
 
 class [[gnu::packed]] IPv4Address {
-    enum class SubnetClass : int {
-        A = 0,
-        B,
-        C,
-        D
-    };
-
 public:
     using in_addr_t = u32;
 
@@ -54,44 +47,44 @@ public:
     constexpr u8 operator[](int i) const
     {
         VERIFY(i >= 0 && i < 4);
-        return octet(SubnetClass(i));
+        return octet(i);
     }
 
 #ifdef KERNEL
     ErrorOr<NonnullOwnPtr<Kernel::KString>> to_string() const
     {
         return Kernel::KString::formatted("{}.{}.{}.{}",
-            octet(SubnetClass::A),
-            octet(SubnetClass::B),
-            octet(SubnetClass::C),
-            octet(SubnetClass::D));
+            octet(0),
+            octet(1),
+            octet(2),
+            octet(3));
     }
 #else
     ByteString to_byte_string() const
     {
         return ByteString::formatted("{}.{}.{}.{}",
-            octet(SubnetClass::A),
-            octet(SubnetClass::B),
-            octet(SubnetClass::C),
-            octet(SubnetClass::D));
+            octet(0),
+            octet(1),
+            octet(2),
+            octet(3));
     }
 
     ByteString to_byte_string_reversed() const
     {
         return ByteString::formatted("{}.{}.{}.{}",
-            octet(SubnetClass::D),
-            octet(SubnetClass::C),
-            octet(SubnetClass::B),
-            octet(SubnetClass::A));
+            octet(3),
+            octet(2),
+            octet(1),
+            octet(0));
     }
 
     ErrorOr<String> to_string() const
     {
         return String::formatted("{}.{}.{}.{}",
-            octet(SubnetClass::A),
-            octet(SubnetClass::B),
-            octet(SubnetClass::C),
-            octet(SubnetClass::D));
+            octet(0),
+            octet(1),
+            octet(2),
+            octet(3));
     }
 #endif
 
@@ -149,10 +142,11 @@ public:
     }
 
 private:
-    constexpr u32 octet(SubnetClass const subnet) const
+    constexpr u32 octet(int n) const
     {
+        VERIFY(n >= 0 && n <= 3);
         constexpr auto bits_per_byte = 8;
-        auto const bits_to_shift = bits_per_byte * int(subnet);
+        auto const bits_to_shift = bits_per_byte * n;
         return (m_data >> bits_to_shift) & 0x0000'00FF;
     }
 

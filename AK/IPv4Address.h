@@ -251,8 +251,14 @@ struct Formatter<IPv4Address> : Formatter<StringView> {
 };
 #endif
 
+consteval IPv4Address operator""_ipv4(const char* data, size_t size)
+{
+    return IPv4Address::from_string({ data, size }).value();
+}
+
 }
 
 #if USING_AK_GLOBALLY
 using AK::IPv4Address;
+using AK::operator""_ipv4;
 #endif

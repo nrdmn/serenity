@@ -122,6 +122,15 @@ TEST_CASE(should_fill_a_b_d_octets_from_3_parts)
     EXPECT_EQ(1, addr.value()[3]);
 }
 
+TEST_CASE(should_make_constexpr_from_string_literal)
+{
+    auto constexpr addr = "167772161"_ipv4;
+
+    static_assert(addr == IPv4Address(10, 0, 0, 1));
+
+    EXPECT_EQ(addr, IPv4Address(10, 0, 0, 1));
+}
+
 TEST_CASE(should_convert_to_in_addr_t)
 {
     constexpr IPv4Address addr(1, 2, 3, 4);

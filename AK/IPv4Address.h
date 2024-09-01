@@ -6,12 +6,12 @@
 
 #pragma once
 
+#include <AK/Array.h>
 #include <AK/Endian.h>
 #include <AK/Format.h>
 #include <AK/Optional.h>
 #include <AK/SipHash.h>
 #include <AK/StringView.h>
-#include <AK/Vector.h>
 
 #ifdef KERNEL
 #    include <AK/Error.h>
@@ -88,39 +88,112 @@ public:
     }
 #endif
 
-    static Optional<IPv4Address> from_string(StringView string)
+    static constexpr Optional<IPv4Address> from_string(StringView string)
     {
-        if (string.is_null())
-            return {};
-
-        auto const parts = string.split_view('.');
-
-        u32 a {};
-        u32 b {};
-        u32 c {};
-        u32 d {};
-
-        if (parts.size() == 1) {
-            d = parts[0].to_number<u32>().value_or(256);
-        } else if (parts.size() == 2) {
-            a = parts[0].to_number<u32>().value_or(256);
-            d = parts[1].to_number<u32>().value_or(256);
-        } else if (parts.size() == 3) {
-            a = parts[0].to_number<u32>().value_or(256);
-            b = parts[1].to_number<u32>().value_or(256);
-            d = parts[2].to_number<u32>().value_or(256);
-        } else if (parts.size() == 4) {
-            a = parts[0].to_number<u32>().value_or(256);
-            b = parts[1].to_number<u32>().value_or(256);
-            c = parts[2].to_number<u32>().value_or(256);
-            d = parts[3].to_number<u32>().value_or(256);
-        } else {
+        if (string.is_empty()) {
             return {};
         }
 
-        if (a > 255 || b > 255 || c > 255 || d > 255)
+        // parser state
+        int nr_octet = 0;
+        bool has_read_one_digit = false;
+        bool has_read_zero_first = false;
+        Array<u64, 4> parts {};
+
+        for (auto const ch : string) {
+            switch (ch) {
+            case '.':
+                // only the last part may be larger than 255
+                if (parts[nr_octet] > 255) {
+                    return {};
+                }
+                // no '.' as first character
+                // no consecutive '.'
+                if (!has_read_one_digit) {
+                    return {};
+                }
+                has_read_one_digit = false;
+                has_read_zero_first = false;
+                nr_octet++;
+                // IP address must not have more than 4 parts
+                if (nr_octet > 3) {
+                    return {};
+                }
+                break;
+            case '0':
+                if (!has_read_one_digit) {
+                    has_read_zero_first = true;
+                }
+                [[fallthrough]];
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                parts[nr_octet] *= 10;
+                // assuming ASCII-like character ordering for digits
+                parts[nr_octet] += ch - '0';
+                // first  part must be <= 0xffff'ffff
+                // second part must be <= 0xff'ffff
+                // third  part must be <= 0xffff
+                // fourth part must be <= 0xff
+                if (parts[nr_octet] > (0xffff'ffffULL >> (nr_octet * 8))) {
+                    return {};
+                }
+                // number must have no leading zeros
+                if (has_read_zero_first && has_read_one_digit) {
+                    return {};
+                }
+                has_read_one_digit = true;
+                break;
+            default:
+                // invalid character
+                return {};
+            }
+        }
+
+        // an IP address must end in a digit
+        if (!has_read_one_digit) {
             return {};
-        return IPv4Address(a, b, c, d);
+        }
+
+        switch (nr_octet) {
+        case 0:
+            return IPv4Address {
+                u8(parts[0] >> 24),
+                u8((parts[0] >> 16) % 0x100),
+                u8((parts[0] >> 8) % 0x100),
+                u8(parts[0] % 0x100),
+            };
+        case 1:
+            return IPv4Address {
+                u8(parts[0]),
+                u8((parts[1] >> 16) % 0x100),
+                u8((parts[1] >> 8) % 0x100),
+                u8(parts[1] % 0x100),
+            };
+        case 2:
+            return IPv4Address {
+                u8(parts[0]),
+                u8(parts[1]),
+                u8((parts[2] >> 8) % 0x100),
+                u8(parts[2] % 0x100),
+            };
+        case 3:
+            return IPv4Address {
+                u8(parts[0]),
+                u8(parts[1]),
+                u8(parts[2]),
+                u8(parts[3]),
+            };
+        default:
+            // we've checked this earlier
+            VERIFY_NOT_REACHED();
+        }
     }
 
     static constexpr IPv4Address netmask_from_cidr(int cidr)
